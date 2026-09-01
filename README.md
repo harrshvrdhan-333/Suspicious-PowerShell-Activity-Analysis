@@ -6,7 +6,7 @@ This project demonstrates a **SOC L1 investigation of suspicious PowerShell acti
 
 The investigation focuses on PowerShell execution, Script Block Logging, system and security-policy discovery activity, process-level telemetry, and file deletion behavior.
 
-The objective was to determine whether the observed PowerShell activity was **benign, suspicious, or indicative of confirmed malicious activity** based on the available evidence.
+The objective was to determine whether the observed activity was **benign, suspicious, or indicative of confirmed malicious activity** based on the available evidence.
 
 ---
 
@@ -24,29 +24,29 @@ The objective was to determine whether the observed PowerShell activity was **be
 
 ---
 
-# 🎯 Investigation Objective
+# 🎯 Investigation Objectives
 
 The objectives of this investigation were to:
 
-* Identify suspicious PowerShell activity
+* Identify PowerShell activity that warranted investigation
 * Analyze PowerShell Script Block Logging
 * Investigate Windows Event ID `4104`
 * Correlate PowerShell activity with Sysmon process telemetry
-* Analyze the executed commands and scripts
-* Investigate system and security-policy discovery activity
-* Review file deletion behavior
-* Build an event timeline
-* Map relevant activity to MITRE ATT&CK
+* Analyze executed commands and scripts
+* Investigate security-policy and system information discovery activity
+* Review PowerShell file deletion behavior
+* Correlate multiple telemetry sources
+* Map observed behavior to MITRE ATT&CK
 * Determine severity and analyst verdict
-* Recommend appropriate response actions
+* Recommend appropriate detection and response actions
 
 ---
 
 # 🚨 1. Alert
 
-Wazuh generated an alert related to PowerShell activity that queried information from the Windows environment.
+Wazuh generated an alert related to PowerShell activity associated with system and environment information discovery.
 
-### Alert Details
+## Alert Details
 
 | Field        | Details                                            |
 | ------------ | -------------------------------------------------- |
@@ -56,9 +56,9 @@ Wazuh generated an alert related to PowerShell activity that queried information
 | MITRE ATT&CK | `T1082 – System Information Discovery`             |
 | Endpoint     | `DESKTOP-2DDE5BC`                                  |
 
-The alert was treated as a **security investigation trigger**, not as automatic proof of malicious activity.
+The alert was treated as an **investigation trigger**, not as automatic proof of malicious activity.
 
-### Evidence
+### Alert Evidence
 
 ![Wazuh PowerShell Alert](./screenshots/Evidence_01_Wazuh_PowerShell_Alert_91816.png)
 
@@ -66,23 +66,11 @@ The alert was treated as a **security investigation trigger**, not as automatic 
 
 # 🔎 2. Evidence
 
-## Evidence 1 — Wazuh PowerShell Alert
+## Evidence 1 — PowerShell Event ID 4104
 
-Wazuh identified PowerShell activity associated with system/environment information discovery.
+Windows Event Viewer recorded PowerShell **Event ID 4104**, providing visibility into the PowerShell script content that was executed.
 
-**Rule ID:** `91816`
-
-**MITRE ATT&CK:** `T1082 – System Information Discovery`
-
-This alert provided the initial trigger for investigation.
-
----
-
-## Evidence 2 — PowerShell Script Block Logging
-
-Windows Event Viewer recorded PowerShell **Event ID 4104**, which provides visibility into PowerShell script content when Script Block Logging is enabled.
-
-One observed script was:
+One observed script contained:
 
 ```powershell
 secedit /export /cfg $env:TEMP\secpol.cfg
@@ -105,13 +93,13 @@ The script exported local security-policy information to a temporary configurati
 
 ### Evidence
 
-![PowerShell Event ID 4104](./screenshots/Evidence_02_PowerShell_4104.png)
+![PowerShell Event ID 4104](./screenshots/Evidence_02_PowerShell_Event_4104.png)
 
 ---
 
-## Evidence 3 — PowerShell Script Block Event
+## Evidence 2 — PowerShell Script Block Logging
 
-The Windows Event Viewer confirmed PowerShell Script Block Logging events under:
+The Windows Event Viewer confirmed PowerShell Script Block Logging under:
 
 ```text
 Microsoft-Windows-PowerShell/Operational
@@ -123,25 +111,25 @@ with:
 Event ID: 4104
 ```
 
-This confirms that PowerShell Script Block Logging was enabled and that the endpoint was capturing executed PowerShell script content.
+This confirms that PowerShell Script Block Logging was enabled and that PowerShell script content was being captured on the endpoint.
 
 ### Evidence
 
-![PowerShell Script Block Event](./screenshots/Evidence_03_PowerShell_Script_Block.png)
+![PowerShell Script Block Event](./screenshots/PowerShell%20Script%20Block%20Event.png)
 
 ---
 
-## Evidence 4 — Sysmon Process Creation
+## Evidence 3 — Sysmon Process Creation
 
-Sysmon provided process-level telemetry related to PowerShell execution.
+Sysmon provided process-level visibility into PowerShell execution.
 
-The PowerShell executable observed during the investigation was:
+The observed PowerShell executable was:
 
 ```text
 C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
 ```
 
-Process creation telemetry can provide additional investigative context such as:
+Process creation telemetry can provide important investigative context such as:
 
 * Process ID
 * Parent process
@@ -153,31 +141,29 @@ This information can help determine how PowerShell was launched and whether the 
 
 ### Evidence
 
-![Sysmon Process Creation](./screenshots/Evidence_04_Sysmon_Process_Creation.png)
+![Sysmon Process Creation](./screenshots/sysmon.event.png)
 
 ---
 
-## Evidence 5 — PowerShell File Deletion
+## Evidence 4 — PowerShell File Deletion
 
 Wazuh generated an alert related to PowerShell being used to delete a file or directory.
 
-**Rule ID:** `92021`
+### Alert Details
 
-**Description:** PowerShell was used to delete files or directories.
+| Field            | Details                                        |
+| ---------------- | ---------------------------------------------- |
+| Rule ID          | `92021`                                        |
+| Activity         | PowerShell used to delete files or directories |
+| Observed Command | `Remove-Item`                                  |
 
-The observed command included:
+The observed script removed the temporary security-policy configuration file after reading the required information.
 
-```powershell
-Remove-Item
-```
-
-The command removed the temporary security-policy configuration file after the script had read the required information.
-
-File deletion is **not automatically malicious**. However, deletion activity is relevant during an investigation because attackers can also use PowerShell to remove artifacts.
+File deletion is **not automatically malicious**. However, it is relevant during a security investigation because attackers can also use deletion commands to remove artifacts.
 
 ### Evidence
 
-![PowerShell File Deletion](./screenshots/Evidence_05_PowerShell_File_Deletion.png)
+![PowerShell File Deletion](./screenshots/PowerShell_File_Deletion_MITRE_Attack.png)
 
 ---
 
@@ -185,28 +171,34 @@ File deletion is **not automatically malicious**. However, deletion activity is 
 
 The investigation followed a structured SOC L1 workflow.
 
-### Step 1 — Alert Triage
+## Step 1 — Alert Triage
 
 The Wazuh alert was reviewed to identify:
 
 * Affected endpoint
 * Rule ID
-* Detection description
+* Alert description
 * Associated MITRE ATT&CK technique
 
-### Step 2 — PowerShell Script Analysis
+The initial alert was treated as a detection requiring investigation rather than immediately classified as malicious.
 
-Event ID `4104` was reviewed to determine the actual PowerShell commands executed.
+---
 
-The investigation identified commands related to:
+## Step 2 — PowerShell Script Analysis
 
-* Security-policy configuration
-* Lockout settings
+PowerShell Event ID `4104` was reviewed to identify the actual commands executed.
+
+The investigation identified activity involving:
+
+* Security-policy information
+* Account lockout settings
 * Password-policy settings
-* Temporary file creation
+* Temporary configuration file creation
 * Temporary file deletion
 
-### Step 3 — Process Investigation
+---
+
+## Step 3 — Process Investigation
 
 Sysmon process creation telemetry was reviewed to identify:
 
@@ -217,65 +209,60 @@ Sysmon process creation telemetry was reviewed to identify:
 * Command line
 * Execution time
 
-### Step 4 — Cross-Source Correlation
+This provided additional context around the PowerShell execution.
 
-Evidence from:
+---
+
+## Step 4 — Cross-Source Correlation
+
+The following telemetry sources were correlated:
 
 ```text
 Wazuh
-+
+   +
 Windows Event Viewer
-+
+   +
 PowerShell Event ID 4104
-+
+   +
 Sysmon
 ```
 
-was correlated to understand the activity from multiple perspectives.
-
-### Step 5 — File Activity Analysis
-
-The use of `Remove-Item` was investigated to determine whether the deleted file was a malicious artifact or a temporary file created as part of the observed script.
-
-The evidence indicated that the deleted file was the temporary security-policy configuration file created by the script itself.
-
-### Step 6 — Contextual Assessment
-
-The observed commands were reviewed in context rather than being classified as malicious solely because PowerShell was used.
+Correlation across multiple sources was used to understand the activity instead of relying on a single alert.
 
 ---
 
-# ⏱️ 4. Investigation Timeline
+## Step 5 — File Activity Analysis
 
-The investigation sequence was reconstructed as follows:
+The use of:
 
-```text
-PowerShell execution
-        ↓
-Sysmon process creation telemetry
-        ↓
-PowerShell Script Block Logging
-        ↓
-Event ID 4104 captures script content
-        ↓
-Security-policy information queried
-        ↓
-Wazuh processes the activity
-        ↓
-Wazuh generates detection alerts
-        ↓
-Temporary security-policy file removed
-        ↓
-Analyst reviews and correlates evidence
+```powershell
+Remove-Item
 ```
 
-### Timeline Evidence
+was investigated.
 
-![PowerShell Timeline](./screenshots/Evidence_06_PowerShell_Timeline.png)
+The available evidence indicated that the file being removed was the temporary security-policy configuration file created by the investigated script.
+
+Therefore, the deletion itself was **not sufficient evidence to conclude malicious artifact removal**.
 
 ---
 
-# 🛡️ 5. MITRE ATT&CK Mapping
+## Step 6 — Contextual Assessment
+
+The PowerShell commands were evaluated in context.
+
+The investigation considered whether the observed activity could be explained by:
+
+* Legitimate administration
+* Security assessment activity
+* System configuration checks
+* Malicious discovery activity
+
+The presence of PowerShell alone was not treated as proof of malicious behavior.
+
+---
+
+# 🛡️ 4. MITRE ATT&CK Mapping
 
 ## T1059.001 — PowerShell
 
@@ -287,7 +274,7 @@ PowerShell was used to execute commands and scripts on the Windows endpoint.
 
 ## T1082 — System Information Discovery
 
-Wazuh identified activity associated with querying information from the Windows environment.
+Wazuh detected PowerShell activity associated with querying system/environment information.
 
 **Tactic:** Discovery
 
@@ -297,46 +284,61 @@ Wazuh identified activity associated with querying information from the Windows 
 
 ## T1070.004 — File Deletion
 
-The investigation evaluated file deletion because `Remove-Item` was used to remove the temporary configuration file.
+The investigation identified the use of `Remove-Item` to delete a temporary configuration file.
 
 **Tactic:** Defense Evasion
 
 **Wazuh Rule:** `92021`
 
-> **Assessment:** The presence of file deletion alone does not confirm defense evasion. The deleted file appeared to be a temporary configuration file generated by the investigated script.
+> **Assessment:** File deletion alone does not confirm defense evasion. In this investigation, the deleted file appeared to be a temporary configuration file created by the script itself.
 
 ---
 
-# 🚦 6. Severity Assessment
+# 🚦 5. Severity Assessment
 
-### Severity: Medium / Suspicious
+### Severity: **Medium — Suspicious**
 
-The activity was considered worthy of investigation because:
+The activity warranted investigation because:
 
-* PowerShell was used to execute scripts.
+* PowerShell was used to execute commands.
 * Security-policy information was queried.
-* Wazuh generated multiple related detections.
+* Wazuh generated related detections.
 * PowerShell was used to remove a temporary file.
 
 However, the available evidence did **not** establish confirmed malicious intent.
 
+Therefore, the alert was assessed as:
+
+> **Medium severity / Suspicious activity requiring further investigation**
+
 ---
 
-# 🧑‍💻 7. Analyst Verdict
+# 🧑‍💻 6. Analyst Verdict
 
 > **Verdict: Suspicious activity requiring further investigation**
 
 The investigation confirmed PowerShell execution and identified Script Block Logging events containing security-policy queries and temporary file deletion.
 
-The observed `secedit`, `Get-Content`, `Select-String`, and `Remove-Item` commands can be used for legitimate administrative or security-assessment purposes.
+The observed commands:
 
-Therefore, the activity should **not be classified as confirmed malicious based on the available evidence alone**.
+```text
+secedit
+Get-Content
+Select-String
+Remove-Item
+```
 
-Additional contextual evidence such as the initiating user, parent process, complete command line, network connections, and related endpoint activity should be reviewed before assigning a confirmed malicious verdict.
+can be used for legitimate administrative or security-assessment purposes.
+
+The available evidence did not provide sufficient proof of malicious intent.
+
+Therefore, the activity was classified as **suspicious rather than confirmed malicious**.
+
+Further context such as the initiating user, parent process, complete command line, network activity, and related endpoint events should be reviewed before assigning a confirmed malicious verdict.
 
 ---
 
-# 💡 8. Recommended Actions
+# 💡 7. Recommended Actions
 
 ## Detection
 
@@ -345,68 +347,72 @@ Additional contextual evidence such as the initiating user, parent process, comp
 * Monitor Sysmon process creation events.
 * Correlate PowerShell activity with user and parent-process information.
 * Monitor suspicious PowerShell execution from unexpected parent processes.
-* Detect encoded or obfuscated PowerShell commands.
-* Monitor unusual PowerShell activity initiated by Office applications, browsers, scheduled tasks, or other unexpected processes.
-* Monitor repeated use of PowerShell file-management commands such as `Remove-Item` in suspicious contexts.
+* Detect encoded or obfuscated PowerShell activity.
+* Monitor PowerShell launched by Office applications, browsers, scheduled tasks, and other unusual parent processes.
+* Investigate suspicious use of PowerShell file-management commands such as `Remove-Item`.
 
 ## Response
 
 If additional evidence confirms malicious activity:
 
-1. Identify the affected user and endpoint.
+1. Identify the affected endpoint and user.
 2. Review the complete PowerShell command line.
 3. Investigate the parent and child process chain.
-4. Review network connections associated with the process.
+4. Review related network connections.
 5. Search for persistence mechanisms.
-6. Search for related activity from the same user, host, or process.
-7. Isolate the endpoint when active compromise is suspected.
+6. Search for related activity from the same host or user.
+7. Isolate the endpoint if active compromise is suspected.
 8. Preserve relevant logs and forensic evidence.
 
 ---
 
-# 📊 9. Key Findings
+# 📊 8. Key Findings
 
 | Finding                      | Evidence                                    |
 | ---------------------------- | ------------------------------------------- |
 | PowerShell Execution         | Sysmon Process Creation                     |
 | Script Block Logging         | PowerShell Event ID `4104`                  |
-| System/Environment Discovery | Wazuh Rule `91816`                          |
-| Security-Policy Queries      | Event ID `4104`                             |
-| File Deletion                | Wazuh Rule `92021`                          |
-| PowerShell Technique         | T1059.001                                   |
+| System Information Discovery | Wazuh Rule `91816`                          |
+| Security-Policy Queries      | PowerShell Event ID `4104`                  |
+| File Deletion Activity       | Wazuh Rule `92021`                          |
+| PowerShell                   | T1059.001                                   |
 | System Information Discovery | T1082                                       |
 | File Deletion                | T1070.004                                   |
 | Final Assessment             | Suspicious / Requires Further Investigation |
 
 ---
 
-# 📸 10. Investigation Evidence
+# 📸 9. Investigation Evidence
 
 All screenshots are stored in the [`screenshots`](./screenshots/) directory.
 
-### Evidence 1 — Wazuh PowerShell Alert
+### 1. Wazuh PowerShell Alert
 
 ![Wazuh PowerShell Alert](./screenshots/Evidence_01_Wazuh_PowerShell_Alert_91816.png)
 
-### Evidence 2 — PowerShell Event ID 4104
+---
 
-![PowerShell Event ID 4104](./screenshots/Evidence_02_PowerShell_4104.png)
+### 2. PowerShell Event ID 4104
 
-### Evidence 3 — PowerShell Script Block Event
+![PowerShell Event ID 4104](./screenshots/Evidence_02_PowerShell_Event_4104.png)
 
-![PowerShell Script Block Event](./screenshots/Evidence_03_PowerShell_Script_Block.png)
+---
 
-### Evidence 4 — Sysmon Process Creation
+### 3. PowerShell Script Block Event
 
-![Sysmon Process Creation](./screenshots/Evidence_04_Sysmon_Process_Creation.png)
+![PowerShell Script Block Event](./screenshots/PowerShell%20Script%20Block%20Event.png)
 
-### Evidence 5 — PowerShell File Deletion
+---
 
-![PowerShell File Deletion](./screenshots/Evidence_05_PowerShell_File_Deletion.png)
+### 4. Sysmon Process Creation
 
-### Evidence 6 — PowerShell Timeline
+![Sysmon Process Creation](./screenshots/sysmon.event.png)
 
-![PowerShell Timeline](./screenshots/Evidence_06_PowerShell_Timeline.png)
+---
+
+### 5. PowerShell File Deletion
+
+![PowerShell File Deletion](./screenshots/PowerShell_File_Deletion_MITRE_Attack.png)
 
 ---
 
@@ -421,27 +427,28 @@ All screenshots are stored in the [`screenshots`](./screenshots/) directory.
 * Process and Command-Line Analysis
 * Security-Policy Activity Analysis
 * File Activity Investigation
-* Alert Correlation
-* Timeline Analysis
+* Cross-Source Correlation
+* Alert Triage
+* Timeline/Sequence Analysis
 * MITRE ATT&CK Mapping
-* SOC L1 Alert Triage
 * Evidence-Based Classification
+* SOC L1 Investigation Methodology
 * Incident Response Recommendations
 
 ---
 
 # 📝 Conclusion
 
-This project demonstrates a **SOC L1 investigation of PowerShell activity using Wazuh and Windows endpoint telemetry**.
+This project demonstrates a **SOC L1 investigation of suspicious PowerShell activity using Wazuh and Windows endpoint telemetry**.
 
-The investigation correlated Wazuh alerts, PowerShell Event ID `4104`, Windows Event Viewer, and Sysmon telemetry to understand the observed activity.
+The investigation correlated Wazuh alerts, PowerShell Event ID `4104`, Windows Event Viewer, and Sysmon process telemetry to understand the observed activity.
 
 The investigation identified PowerShell commands that queried local security-policy information and removed a temporary configuration file.
 
-Although these behaviors can be associated with attacker activity, the available evidence did not provide sufficient proof of malicious intent.
+Although these behaviors can appear in attacker activity, they can also occur during legitimate administrative or security-assessment operations.
 
-The final assessment was therefore:
+Based on the available evidence, the activity was classified as:
 
-> **Suspicious activity requiring further contextual investigation, but not confirmed malicious based on the available evidence.**
+> **Suspicious and requiring further investigation, but not confirmed malicious.**
 
-This investigation demonstrates the importance of **correlating multiple telemetry sources and using evidence-based analysis instead of classifying PowerShell activity as malicious solely because PowerShell was used.**
+This project demonstrates the importance of **alert triage, evidence collection, cross-source correlation, MITRE ATT&CK mapping, and evidence-based analyst conclusions** rather than treating every PowerShell event as malicious.
